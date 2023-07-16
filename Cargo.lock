@@ -478,6 +478,7 @@ dependencies = [
  "criterion",
  "mime_guess",
  "rand",
+ "rayon",
  "tokio",
  "tower",
  "tower-http",

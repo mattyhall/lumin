@@ -9,6 +9,7 @@ edition = "2021"
 axum = { version = "0.6.18", features = ["tracing"] }
 mime_guess = "2.0.4"
 rand = "0.8.5"
+rayon = "1.7.0"
 tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "fs", "sync"] }
 tower = "0.4.13"
 tower-http = { version = "0.4.1", features = ["tracing", "trace"] }

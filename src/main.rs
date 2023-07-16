@@ -6,7 +6,6 @@ use axum::routing::get;
 use axum::{Extension, Router};
 use std::error::Error;
 use std::net::SocketAddr;
-use std::sync;
 use store::{find_and_process, Store};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -17,7 +16,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
     let cwd = std::env::current_dir()?;
-    let store = sync::Arc::new(find_and_process(cwd)?);
+    let store = find_and_process(cwd)?;
 
     let app = Router::new().fallback(get(root)).layer(
         ServiceBuilder::new()
@@ -34,7 +33,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn root<T>(store: Extension<sync::Arc<Store>>, request: Request<T>) -> impl IntoResponse {
+async fn root<T>(store: Extension<Store>, request: Request<T>) -> impl IntoResponse {
     let path = request.uri().path().trim_start_matches('/');
     store.get(path).unwrap().to_owned()
 }

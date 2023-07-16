@@ -6,6 +6,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync;
 use tracing::{debug, info, instrument};
+use rayon::prelude::*;
 
 pub const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
 
@@ -59,9 +60,9 @@ impl ResourceProcessor for StaticProcessor {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Store {
-    hm: sync::Mutex<HashMap<PathBuf, Resource>>,
+    hm: sync::Arc<sync::Mutex<HashMap<PathBuf, Resource>>>,
 }
 
 impl Store {
@@ -115,16 +116,21 @@ pub fn find_and_process<P: AsRef<Path>>(base: P) -> Result<Store, Box<dyn Error>
 
     walk(base, &mut paths)?;
 
-    let mut store = Store::default();
+    let store = Store::default();
 
-    for path in paths {
-        if !StaticProcessor::matches(&path) {
-            break;
-        }
+    paths
+        .into_par_iter()
+        .try_for_each(|path| -> Result<(), String> {
+            let mut store = store.clone();
+            if !StaticProcessor::matches(&path) {
+                return Ok(());
+            }
 
-        let short_path = path.strip_prefix(base)?;
-        store.put(short_path, StaticProcessor::process(&path)?);
-    }
+            let short_path = path.strip_prefix(base).map_err(|e| e.to_string())?;
+            store.put(short_path, StaticProcessor::process(&path).map_err(|e| e.to_string())?);
+
+            Ok(())
+        })?;
 
     info!(elapsed=?start.elapsed(), "rebuilding finished");
 
