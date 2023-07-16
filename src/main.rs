@@ -1,3 +1,5 @@
+use axum::http::{header, Request};
+use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
 use std::collections::HashMap;
@@ -12,44 +14,74 @@ use tracing::{debug, info, instrument};
 
 const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
 
+#[derive(Clone)]
+struct Resource {
+    path: PathBuf,
+    contents: Vec<u8>,
+}
+
+impl Resource {
+    fn content_type(&self) -> String {
+        mime_guess::from_path(&self.path)
+            .first_or_text_plain()
+            .essence_str()
+            .to_owned()
+    }
+}
+
+impl IntoResponse for Resource {
+    fn into_response(self) -> axum::response::Response {
+        let typ = self.content_type();
+        let res = ([(header::CONTENT_TYPE, typ)], self.contents);
+        res.into_response()
+    }
+}
+
 trait ResourceProcessor {
     fn matches(path: &Path) -> bool;
-    fn process(path: &Path) -> Result<String, Box<dyn Error>>;
+    fn process(path: &Path) -> Result<Resource, Box<dyn Error>>;
 }
 
 struct StaticProcessor {}
 impl ResourceProcessor for StaticProcessor {
     fn matches(path: &Path) -> bool {
         path.extension()
-            .map(|e| e == "css" || e == "html" || e == "jpg")
+            .map(|e| EXTENSIONS.iter().any(|wanted| *wanted == e))
             .unwrap_or(false)
     }
 
     #[instrument]
-    fn process(path: &Path) -> Result<String, Box<dyn Error>> {
+    fn process(path: &Path) -> Result<Resource, Box<dyn Error>> {
         info!("statically processing");
 
-        let mut buf = String::new();
-        std::fs::File::open(path)?.read_to_string(&mut buf)?;
+        let mut buf = Vec::new();
+        std::fs::File::open(path)?.read_to_end(&mut buf)?;
 
-        Ok(buf)
+        Ok(Resource {
+            path: path.to_owned(),
+            contents: buf,
+        })
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Clone)]
 struct Store {
-    hm: HashMap<PathBuf, String>,
+    hm: HashMap<PathBuf, Resource>,
 }
 
 impl Store {
-    fn put<P: Into<PathBuf>>(self: &mut Self, path: P, content: String) {
+    fn put<P: Into<PathBuf>>(self: &mut Self, path: P, resource: Resource) {
         let path = path.into();
-        debug!(?path, content_length = content.len(), "putting into store");
-        self.hm.insert(path, content);
+        debug!(
+            ?path,
+            content_length = resource.contents.len(),
+            "putting into store"
+        );
+        self.hm.insert(path, resource);
     }
 
-    fn get<P: AsRef<Path>>(self: &Self, path: P) -> Option<&str> {
-        self.hm.get(path.as_ref()).map(|s| s.as_str())
+    fn get<P: AsRef<Path>>(self: &Self, path: P) -> Option<Resource> {
+        self.hm.get(path.as_ref()).cloned()
     }
 }
 
@@ -101,15 +133,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let store = sync::Arc::new(sync::Mutex::new(find_and_process()?));
 
-    let app = Router::new()
-        .fallback(get(root)).layer(
+    let app = Router::new().fallback(get(root)).layer(
         ServiceBuilder::new()
             .layer(TraceLayer::new_for_http())
             .layer(Extension(store)),
     );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    tracing::debug!("listening on {}", addr);
+    info!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await?;
@@ -117,7 +148,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn root(store: Extension<sync::Arc<sync::Mutex<Store>>>) -> String {
+async fn root<T>(
+    store: Extension<sync::Arc<sync::Mutex<Store>>>,
+    request: Request<T>,
+) -> impl IntoResponse {
     let handle = store.0.lock().unwrap();
-    handle.get("test-site/index.html").unwrap().to_string()
+    let path = request.uri().path().trim_start_matches('/');
+    handle.get(path).unwrap().to_owned()
 }
