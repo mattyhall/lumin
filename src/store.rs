@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync;
 use tracing::{debug, info, instrument};
 
-const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
+pub const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
 
 #[derive(Clone)]
 pub struct Resource {
@@ -105,15 +105,15 @@ fn walk(base: &Path, output: &mut Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn find_and_process() -> Result<Store, Box<dyn Error>> {
+pub fn find_and_process<P: AsRef<Path>>(base: P) -> Result<Store, Box<dyn Error>> {
     let start = std::time::Instant::now();
 
     info!("rebuilding");
 
     let mut paths = Vec::new();
-    let cwd = std::env::current_dir()?;
+    let base = base.as_ref();
 
-    walk(&cwd, &mut paths)?;
+    walk(base, &mut paths)?;
 
     let mut store = Store::default();
 
@@ -122,7 +122,7 @@ fn find_and_process() -> Result<Store, Box<dyn Error>> {
             break;
         }
 
-        let short_path = path.strip_prefix(&cwd)?;
+        let short_path = path.strip_prefix(base)?;
         store.put(short_path, StaticProcessor::process(&path)?);
     }
 
@@ -130,4 +130,3 @@ fn find_and_process() -> Result<Store, Box<dyn Error>> {
 
     Ok(store)
 }
-

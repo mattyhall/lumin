@@ -16,7 +16,8 @@ use tracing::info;
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
-    let store = sync::Arc::new(find_and_process()?);
+    let cwd = std::env::current_dir()?;
+    let store = sync::Arc::new(find_and_process(cwd)?);
 
     let app = Router::new().fallback(get(root)).layer(
         ServiceBuilder::new()

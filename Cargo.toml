@@ -7,8 +7,17 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.6.18", features = ["tracing"] }
-tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread"] }
+mime_guess = "2.0.4"
+rand = "0.8.5"
+tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "fs", "sync"] }
 tower = "0.4.13"
 tower-http = { version = "0.4.1", features = ["tracing", "trace"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "store"
+harness = false
