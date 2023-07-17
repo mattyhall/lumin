@@ -9,7 +9,7 @@ use tracing::{debug, info};
 
 use crate::ResourceProcessor;
 
-pub const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
+pub const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2", "liquid"];
 
 #[derive(Clone)]
 pub struct Resource {
@@ -111,7 +111,7 @@ pub fn find_and_process<P: AsRef<Path>>(
                     processor.process(&path).map_err(|e| e.to_string())?,
                 );
 
-                return Ok(())
+                return Ok(());
             }
 
             Ok(())
