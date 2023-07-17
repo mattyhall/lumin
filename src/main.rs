@@ -1,12 +1,11 @@
-mod store;
-
 use axum::http::{Request, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
+use lumin::processors::StaticProcessor;
+use lumin::store::{find_and_process, Store};
 use std::error::Error;
 use std::net::SocketAddr;
-use store::{find_and_process, Store};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::info;
@@ -15,8 +14,10 @@ use tracing::info;
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
+    let s = StaticProcessor {};
+
     let cwd = std::env::current_dir()?;
-    let store = find_and_process(cwd)?;
+    let store = find_and_process(cwd, &[&s])?;
 
     let app = Router::new().fallback(get(root)).layer(
         ServiceBuilder::new()

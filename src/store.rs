@@ -1,19 +1,20 @@
 use axum::http::header;
 use axum::response::IntoResponse;
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::error::Error;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync;
-use tracing::{debug, info, instrument};
-use rayon::prelude::*;
+use tracing::{debug, info};
+
+use crate::ResourceProcessor;
 
 pub const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
 
 #[derive(Clone)]
 pub struct Resource {
-    path: PathBuf,
-    contents: Vec<u8>,
+    pub(crate) path: PathBuf,
+    pub(crate) contents: Vec<u8>,
 }
 
 impl Resource {
@@ -30,33 +31,6 @@ impl IntoResponse for Resource {
         let typ = self.content_type();
         let res = ([(header::CONTENT_TYPE, typ)], self.contents);
         res.into_response()
-    }
-}
-
-trait ResourceProcessor {
-    fn matches(path: &Path) -> bool;
-    fn process(path: &Path) -> Result<Resource, Box<dyn Error>>;
-}
-
-struct StaticProcessor {}
-impl ResourceProcessor for StaticProcessor {
-    fn matches(path: &Path) -> bool {
-        path.extension()
-            .map(|e| EXTENSIONS.iter().any(|wanted| *wanted == e))
-            .unwrap_or(false)
-    }
-
-    #[instrument]
-    fn process(path: &Path) -> Result<Resource, Box<dyn Error>> {
-        info!("statically processing");
-
-        let mut buf = Vec::new();
-        std::fs::File::open(path)?.read_to_end(&mut buf)?;
-
-        Ok(Resource {
-            path: path.to_owned(),
-            contents: buf,
-        })
     }
 }
 
@@ -106,7 +80,10 @@ fn walk(base: &Path, output: &mut Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn find_and_process<P: AsRef<Path>>(base: P) -> Result<Store, Box<dyn Error>> {
+pub fn find_and_process<P: AsRef<Path>>(
+    base: P,
+    processors: &[&dyn ResourceProcessor],
+) -> Result<Store, Box<dyn Error>> {
     let start = std::time::Instant::now();
 
     info!("rebuilding");
@@ -122,12 +99,20 @@ pub fn find_and_process<P: AsRef<Path>>(base: P) -> Result<Store, Box<dyn Error>
         .into_par_iter()
         .try_for_each(|path| -> Result<(), String> {
             let mut store = store.clone();
-            if !StaticProcessor::matches(&path) {
-                return Ok(());
-            }
 
-            let short_path = path.strip_prefix(base).map_err(|e| e.to_string())?;
-            store.put(short_path, StaticProcessor::process(&path).map_err(|e| e.to_string())?);
+            for processor in processors {
+                if !processor.matches(&path) {
+                    continue;
+                }
+
+                let short_path = path.strip_prefix(base).map_err(|e| e.to_string())?;
+                store.put(
+                    short_path,
+                    processor.process(&path).map_err(|e| e.to_string())?,
+                );
+
+                return Ok(())
+            }
 
             Ok(())
         })?;

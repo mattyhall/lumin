@@ -1,9 +1,8 @@
-use std::{path::Path, error::Error, io::Write};
+use std::{error::Error, io::Write, path::Path};
 
 use criterion::{criterion_group, criterion_main, Criterion};
+use lumin::store::{find_and_process, EXTENSIONS};
 use rand::{seq::IteratorRandom, Rng, SeedableRng};
-use lumin::store::{EXTENSIONS, find_and_process};
-
 
 struct TreeGenerator {
     rng: rand::rngs::StdRng,
