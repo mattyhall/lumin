@@ -13,13 +13,18 @@ pub const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2", "liquid
 
 #[derive(Clone)]
 pub struct Resource {
-    pub(crate) path: PathBuf,
+    pub(crate) original_path: PathBuf,
+    pub(crate) renamed_path: Option<PathBuf>,
     pub(crate) contents: Vec<u8>,
 }
 
 impl Resource {
+    fn path(&self) -> &Path {
+        self.renamed_path.as_ref().unwrap_or(&self.original_path)
+    }
+
     fn content_type(&self) -> String {
-        mime_guess::from_path(&self.path)
+        mime_guess::from_path(self.path())
             .first_or_text_plain()
             .essence_str()
             .to_owned()
@@ -105,11 +110,14 @@ pub fn find_and_process<P: AsRef<Path>>(
                     continue;
                 }
 
-                let short_path = path.strip_prefix(base).map_err(|e| e.to_string())?;
-                store.put(
-                    short_path,
-                    processor.process(&path).map_err(|e| e.to_string())?,
-                );
+                let resource = processor.process(&path).map_err(|e| e.to_string())?;
+                let short_path = resource
+                    .path()
+                    .strip_prefix(base)
+                    .map_err(|e| e.to_string())?
+                    .to_owned();
+
+                store.put(short_path, resource);
 
                 return Ok(());
             }

@@ -22,7 +22,8 @@ impl ResourceProcessor for StaticProcessor {
         std::fs::File::open(path)?.read_to_end(&mut buf)?;
 
         Ok(Resource {
-            path: path.to_owned(),
+            original_path: path.to_owned(),
+            renamed_path: None,
             contents: buf,
         })
     }
@@ -86,11 +87,12 @@ impl ResourceProcessor for LiquidProcessor {
         let mut buffer = Vec::new();
         tmpl.render_to(&mut buffer, &obj)?;
 
-        let mut path = path.to_owned();
-        path.set_extension("html");
+        let mut new_path = path.to_owned();
+        new_path.set_extension("html");
 
         Ok(Resource {
-            path,
+            original_path: path.to_owned(),
+            renamed_path: Some(new_path),
             contents: buffer,
         })
     }
