@@ -1,6 +1,6 @@
 mod store;
 
-use axum::http::Request;
+use axum::http::{Request, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
@@ -35,5 +35,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn root<T>(store: Extension<Store>, request: Request<T>) -> impl IntoResponse {
     let path = request.uri().path().trim_start_matches('/');
-    store.get(path).unwrap().to_owned()
+    if let Some(res) = store.get(path) {
+        return res.into_response();
+    }
+
+    StatusCode::NOT_FOUND.into_response()
 }
