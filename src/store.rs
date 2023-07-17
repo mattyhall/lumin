@@ -66,7 +66,7 @@ pub struct Store {
 }
 
 impl Store {
-    fn put<P: Into<PathBuf>>(self: &mut Self, path: P, resource: Resource) {
+    fn put<P: Into<PathBuf>>(&mut self, path: P, resource: Resource) {
         let path = path.into();
         info!(
             ?path,
@@ -78,7 +78,7 @@ impl Store {
         hm.insert(path, resource);
     }
 
-    pub fn get<P: AsRef<Path>>(self: &Self, path: P) -> Option<Resource> {
+    pub fn get<P: AsRef<Path>>(&self, path: P) -> Option<Resource> {
         let hm = self.hm.lock().unwrap();
         hm.get(path.as_ref()).cloned()
     }

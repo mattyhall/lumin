@@ -34,6 +34,7 @@
             cargo
             rust-analyzer
             rustfmt
+            clippy
           ];
         };
 
