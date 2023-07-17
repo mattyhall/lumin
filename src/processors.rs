@@ -1,5 +1,9 @@
 use crate::{store::Resource, ResourceProcessor};
-use std::{error::Error, io::Read, path::Path};
+use std::{
+    error::Error,
+    io::Read,
+    path::{Path, PathBuf},
+};
 use tracing::{debug, info, instrument};
 
 const STATIC_EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
@@ -30,6 +34,7 @@ impl ResourceProcessor for StaticProcessor {
 }
 
 pub struct LiquidProcessor {
+    partial_dir: PathBuf,
     parser: liquid::Parser,
 }
 
@@ -52,12 +57,13 @@ impl LiquidProcessor {
             let mut buf = String::new();
             f.read_to_string(&mut buf)?;
 
-            ims.add(short_path.to_string_lossy(), buf);
+            ims.add(short_path.file_name().unwrap().to_string_lossy(), buf);
         }
 
         let partials = liquid::partials::EagerCompiler::new(ims);
 
         Ok(LiquidProcessor {
+            partial_dir: partial_dir.as_ref().to_owned(),
             parser: liquid::ParserBuilder::new()
                 .stdlib()
                 .partials(partials)
@@ -75,6 +81,7 @@ impl std::fmt::Debug for LiquidProcessor {
 impl ResourceProcessor for LiquidProcessor {
     fn matches(&self, path: &Path) -> bool {
         path.extension().map(|e| e == "liquid").unwrap_or(false)
+            && !path.starts_with(&self.partial_dir)
     }
 
     #[instrument]
