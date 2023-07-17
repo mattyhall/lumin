@@ -2,7 +2,7 @@ use axum::http::{Request, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
-use lumin::processors::{StaticProcessor, LiquidProcessor};
+use lumin::processors::{LiquidProcessor, StaticProcessor};
 use lumin::store::{find_and_process, Store};
 use std::error::Error;
 use std::net::SocketAddr;
@@ -14,11 +14,16 @@ use tracing::info;
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
-    let s = StaticProcessor {};
-    let l = LiquidProcessor::new("_partials")?;
+    let path = if let Some(arg) = std::env::args().skip(1).take(1).next() {
+        arg.into()
+    } else {
+        std::env::current_dir()?
+    };
 
-    let cwd = std::env::current_dir()?;
-    let store = find_and_process(cwd, &[&s, &l])?;
+    let s = StaticProcessor {};
+    let l = LiquidProcessor::new(path.join("partials"))?;
+
+    let store = find_and_process(path, &[&s, &l])?;
 
     let app = Router::new().fallback(get(root)).layer(
         ServiceBuilder::new()

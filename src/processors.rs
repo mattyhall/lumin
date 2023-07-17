@@ -1,6 +1,6 @@
 use crate::{store::Resource, ResourceProcessor};
 use std::{error::Error, io::Read, path::Path};
-use tracing::{info, instrument, debug};
+use tracing::{debug, info, instrument};
 
 const STATIC_EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
 
@@ -56,8 +56,11 @@ impl LiquidProcessor {
 
         let partials = liquid::partials::EagerCompiler::new(ims);
 
-        Ok(LiquidProcessor{
-            parser: liquid::ParserBuilder::new().stdlib().partials(partials).build()?,
+        Ok(LiquidProcessor {
+            parser: liquid::ParserBuilder::new()
+                .stdlib()
+                .partials(partials)
+                .build()?,
         })
     }
 }

@@ -86,7 +86,7 @@ pub fn find_and_process<P: AsRef<Path>>(
 ) -> Result<Store, Box<dyn Error>> {
     let start = std::time::Instant::now();
 
-    info!("rebuilding");
+    info!(base=?base.as_ref(), "rebuilding");
 
     let mut paths = Vec::new();
     let base = base.as_ref();
