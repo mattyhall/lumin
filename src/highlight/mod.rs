@@ -1,16 +1,9 @@
 use std::{collections::HashMap, error::Error};
-
-use tree_sitter::Language;
 use tree_sitter_highlight::HighlightEvent;
 
-extern "C" {
-    fn tree_sitter_zig() -> Language;
+mod generated {
+    include!(concat!(env!("OUT_DIR"), "/generated_tree_sitter.rs"));
 }
-
-const ZIG_HIGHLIGHT_QUERY: &'static str =
-    include_str!("../third_party/tree-sitter-zig/queries/highlights.scm");
-const ZIG_INJECTIONS_QUERY: &'static str =
-    include_str!("../third_party/tree-sitter-zig/queries/injections.scm");
 
 const HIGHLIGHT_NAMES: &[&str] = &[
     "attribute",
@@ -51,20 +44,8 @@ pub struct Highlight {
 
 impl Highlight {
     pub fn new() -> Result<Self, Box<dyn Error>> {
-        let mut c = HashMap::new();
-
-        let zig = unsafe { tree_sitter_zig() };
-        let mut zig_config = tree_sitter_highlight::HighlightConfiguration::new(
-            zig,
-            ZIG_HIGHLIGHT_QUERY,
-            ZIG_INJECTIONS_QUERY,
-            "",
-        )?;
-        zig_config.configure(HIGHLIGHT_NAMES);
-        c.insert("zig", zig_config);
-
         Ok(Self {
-            configs: c,
+            configs: generated::get_configs(HIGHLIGHT_NAMES)?,
             highlighter: tree_sitter_highlight::Highlighter::new(),
         })
     }
