@@ -1,0 +1,3 @@
+[submodule "third_party/tree-sitter-zig"]
+	path = third_party/tree-sitter-zig
+	url = git@github.com:maxxnino/tree-sitter-zig.git
