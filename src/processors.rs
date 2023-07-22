@@ -1,5 +1,6 @@
 use crate::{store::Resource, ResourceProcessor};
 use markdown;
+use serde::Deserialize;
 use std::{
     error::Error,
     io::Read,
@@ -81,6 +82,13 @@ impl ResourceProcessor for LiquidProcessor {
     }
 }
 
+#[derive(Deserialize)]
+struct PostMetadata {
+    title: String,
+    description: String,
+    published: toml::value::Datetime,
+}
+
 pub struct PostsProcessor {
     posts_dir: PathBuf,
     posts_template_path: PathBuf,
@@ -99,6 +107,17 @@ impl PostsProcessor {
             post_template,
             posts_template_path,
         })
+    }
+
+    #[instrument]
+    fn get_metadata(&self, mut path: PathBuf) -> Result<PostMetadata, Box<dyn Error>> {
+        path.set_extension("toml");
+
+        let mut f = std::fs::File::open(path)?;
+        let mut buf = String::new();
+        f.read_to_string(&mut buf)?;
+
+        Ok(toml::from_str(&buf)?)
     }
 }
 
@@ -137,8 +156,10 @@ impl ResourceProcessor for PostsProcessor {
         let mut buf = String::new();
         f.read_to_string(&mut buf)?;
 
+        let meta = self.get_metadata(path.to_owned())?;
+
         let html = markdown::to_html(&buf);
-        let obj = liquid::object!({ "contents": html });
+        let obj = liquid::object!({ "contents": html, "post_title": meta.title, "post_published": meta.published.to_string() });
         let mut contents_buf = Vec::new();
         self.post_template.render_to(&mut contents_buf, &obj)?;
 
