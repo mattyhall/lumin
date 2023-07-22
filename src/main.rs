@@ -5,10 +5,41 @@ use axum::{Extension, Router};
 use lumin::processors::{LiquidProcessor, StaticProcessor};
 use lumin::store::{find_and_process, Store};
 use std::error::Error;
+use std::io::Read;
 use std::net::SocketAddr;
+use std::path::Path;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use tracing::info;
+use tracing::{debug, info};
+
+fn create_parser(partials_dir: impl AsRef<Path>) -> Result<liquid::Parser, Box<dyn Error>> {
+    let mut ims = liquid::partials::InMemorySource::new();
+
+    for entry in std::fs::read_dir(partials_dir.as_ref())? {
+        let entry = entry?;
+        if entry.metadata()?.is_dir() {
+            continue;
+        }
+
+        let path = entry.path();
+        debug!(?path, "found partial");
+
+        let short_path = path.strip_prefix(partials_dir.as_ref())?;
+
+        let mut f = std::fs::File::open(&path)?;
+        let mut buf = String::new();
+        f.read_to_string(&mut buf)?;
+
+        ims.add(short_path.file_name().unwrap().to_string_lossy(), buf);
+    }
+
+    let partials = liquid::partials::EagerCompiler::new(ims);
+
+    Ok(liquid::ParserBuilder::new()
+        .stdlib()
+        .partials(partials)
+        .build()?)
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -20,8 +51,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::env::current_dir()?
     };
 
+    let partials_dir = path.join("partials");
+    let parser = create_parser(&partials_dir)?;
+
     let s = StaticProcessor {};
-    let l = LiquidProcessor::new(path.join("partials"))?;
+    let l = LiquidProcessor::new(partials_dir, parser);
 
     let store = find_and_process(path, &[&s, &l])?;
 
