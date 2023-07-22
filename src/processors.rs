@@ -279,7 +279,7 @@ impl ResourceProcessor for PostsProcessor {
     #[instrument]
     fn flush(&self) -> Result<Vec<Resource>, Box<dyn Error>> {
         let mut handle = self.posts.lock().map_err(|e| e.to_string())?;
-        handle.sort_by(|a, b| a.published.cmp(&b.published));
+        handle.sort_by(|a, b| a.published.cmp(&b.published).reverse());
 
         let chunks: Vec<_> = handle.chunks(10).collect();
         let len = chunks.len();
