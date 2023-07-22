@@ -2,7 +2,7 @@ use axum::http::{Request, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
-use lumin::processors::{LiquidProcessor, StaticProcessor};
+use lumin::processors::{LiquidProcessor, PostsProcessor, StaticProcessor};
 use lumin::store::{find_and_process, Store};
 use std::error::Error;
 use std::io::Read;
@@ -55,9 +55,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let parser = create_parser(&partials_dir)?;
 
     let s = StaticProcessor {};
+    let p = PostsProcessor::new(path.join("posts"), path.join("post.liquid"), &parser)?;
     let l = LiquidProcessor::new(partials_dir, parser);
 
-    let store = find_and_process(path, &[&s, &l])?;
+    let store = find_and_process(path, &[&p, &l, &s])?;
 
     let app = Router::new().fallback(get(root)).layer(
         ServiceBuilder::new()

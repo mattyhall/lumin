@@ -9,7 +9,7 @@ use tracing::{debug, info};
 
 use crate::ResourceProcessor;
 
-pub const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2", "liquid"];
+pub const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2", "liquid", "md", "markdown"];
 
 #[derive(Clone)]
 pub struct Resource {

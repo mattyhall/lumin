@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 axum = { version = "0.6.18", features = ["tracing"] }
 liquid = { version = "0.26.4", features = ["stdlib", "liquid-lib"] }
+markdown = "1.0.0-alpha.11"
 mime_guess = "2.0.4"
 rand = "0.8.5"
 rayon = "1.7.0"
