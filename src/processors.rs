@@ -1,15 +1,17 @@
 use crate::{
+    highlight,
     store::{Resource, URLPath},
     ResourceProcessor,
 };
 use markdown;
+use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 
 const STATIC_EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
 
@@ -104,7 +106,11 @@ pub struct PostsProcessor {
     post_template: liquid::Template,
     post_list_template_path: PathBuf,
     post_list_template: liquid::Template,
+
+    code_regex: Regex,
+
     posts: Arc<Mutex<Vec<PostItem>>>,
+    highlighter: Arc<Mutex<highlight::Highlight>>,
 }
 
 impl PostsProcessor {
@@ -123,6 +129,13 @@ impl PostsProcessor {
             post_list_template_path,
             post_list_template,
             posts: Arc::default(),
+            highlighter: Arc::new(Mutex::new(highlight::Highlight::new()?)),
+            code_regex: RegexBuilder::new(
+                r#"<pre>\s*<code( class="language-(.*?)")?>(.+?)</code>\s*</pre>"#,
+            )
+            .multi_line(true)
+            .dot_matches_new_line(true)
+            .build()?,
         })
     }
 
@@ -167,6 +180,40 @@ impl PostsProcessor {
             contents: buf,
         })
     }
+
+    #[instrument]
+    fn highlight_code(&self, src: &str) -> Result<String, Box<dyn Error>> {
+        let mut contents = src.to_owned();
+        for c in self.code_regex.captures_iter(src) {
+            let all = c.get(0).unwrap();
+            let code = c.get(3).unwrap().as_str();
+            debug!(start = all.start(), end = all.end(), "got code match");
+
+            let language = c.get(2).map(|c| c.as_str()).unwrap_or("");
+            if language != "zig" {
+                contents = contents.replace(
+                    all.as_str(),
+                    &format!(r#"<pre class="code-listing"><code>{}</code></pre>"#, code),
+                );
+                continue;
+            }
+
+            let code = {
+                let code = &html_escape::decode_html_entities(code);
+                let mut highlighter = self.highlighter.lock().map_err(|e| e.to_string())?;
+                highlighter.highlight(&c[2], code.as_bytes())?
+            };
+            contents = contents.replace(
+                all.as_str(),
+                &format!(
+                    r#"<pre class="code-listing"><code>{}</code></pre>"#,
+                    std::str::from_utf8(&code)?
+                ),
+            );
+        }
+
+        Ok(contents)
+    }
 }
 
 impl std::fmt::Debug for PostsProcessor {
@@ -206,8 +253,7 @@ impl ResourceProcessor for PostsProcessor {
         let meta = self.get_metadata(path.to_owned())?;
 
         let obj = liquid::object!({ "contents": html, "post_title": meta.title, "post_published": meta.published.to_string() });
-        let mut contents_buf = Vec::new();
-        self.post_template.render_to(&mut contents_buf, &obj)?;
+        let contents = self.highlight_code(&self.post_template.render(&obj)?)?;
 
         let mut new_path = path.to_owned();
         new_path.set_extension("html");
@@ -225,7 +271,7 @@ impl ResourceProcessor for PostsProcessor {
         Ok(Resource {
             original_path: path.to_owned(),
             url_path: URLPath::Filepath(new_path),
-            contents: contents_buf,
+            contents: contents.as_bytes().to_owned(),
         })
     }
 
