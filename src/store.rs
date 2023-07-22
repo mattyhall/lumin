@@ -9,18 +9,51 @@ use tracing::{debug, info};
 
 use crate::ResourceProcessor;
 
-pub const EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2", "liquid", "md", "markdown"];
+pub const EXTENSIONS: &[&str] = &[
+    "css", "html", "jpg", "jpeg", "woff2", "liquid", "md", "markdown",
+];
 
 #[derive(Clone)]
+pub enum URLPath {
+    UseOriginalPath,
+    Filepath(PathBuf),
+    Absolute(String),
+}
+
+impl std::default::Default for URLPath {
+    fn default() -> Self {
+        URLPath::UseOriginalPath
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct Resource {
     pub(crate) original_path: PathBuf,
-    pub(crate) renamed_path: Option<PathBuf>,
+    pub(crate) url_path: URLPath,
     pub(crate) contents: Vec<u8>,
 }
 
 impl Resource {
-    fn path(&self) -> &Path {
-        self.renamed_path.as_ref().unwrap_or(&self.original_path)
+    fn path(&self) -> PathBuf {
+        match &self.url_path {
+            URLPath::UseOriginalPath => self.original_path.clone(),
+            URLPath::Filepath(path) => path.clone(),
+            URLPath::Absolute(s) => s.into(),
+        }
+    }
+
+    fn url(&self, base: impl AsRef<Path>) -> Result<String, Box<dyn Error>> {
+        let file_path = match &self.url_path {
+            URLPath::UseOriginalPath => &self.original_path,
+            URLPath::Filepath(path) => &path,
+            URLPath::Absolute(s) => return Ok(s.clone()),
+        };
+
+        Ok(file_path
+            .strip_prefix(base)
+            .map_err(|e| e.to_string())?
+            .to_string_lossy()
+            .to_string())
     }
 
     fn content_type(&self) -> String {
@@ -41,18 +74,17 @@ impl IntoResponse for Resource {
 
 #[derive(Default, Clone)]
 pub struct Store {
-    hm: sync::Arc<sync::Mutex<HashMap<PathBuf, Resource>>>,
+    hm: sync::Arc<sync::Mutex<HashMap<String, Resource>>>,
 }
 
 impl Store {
-    fn put<P: Into<PathBuf>>(&mut self, path: P, resource: Resource) {
+    fn put(&mut self, path: String, resource: Resource) {
         if resource.contents.len() == 0 {
             return;
         }
 
-        let path = path.into();
         info!(
-            ?path,
+            path,
             content_length = resource.contents.len(),
             "putting into store"
         );
@@ -61,9 +93,9 @@ impl Store {
         hm.insert(path, resource);
     }
 
-    pub fn get<P: AsRef<Path>>(&self, path: P) -> Option<Resource> {
+    pub fn get(&self, path: &str) -> Option<Resource> {
         let hm = self.hm.lock().unwrap();
-        hm.get(path.as_ref()).cloned()
+        hm.get(path).cloned()
     }
 }
 
@@ -115,13 +147,8 @@ pub fn find_and_process<P: AsRef<Path>>(
                 }
 
                 let resource = processor.process(&path).map_err(|e| e.to_string())?;
-                let short_path = resource
-                    .path()
-                    .strip_prefix(base)
-                    .map_err(|e| e.to_string())?
-                    .to_owned();
-
-                store.put(short_path, resource);
+                let url = resource.url(base).map_err(|e| e.to_string())?;
+                store.put(url, resource);
 
                 return Ok(());
             }
@@ -137,10 +164,15 @@ pub fn find_and_process<P: AsRef<Path>>(
             continue;
         }
 
-        info!(?processor, count=resources.len(), "processor has extra resources");
+        info!(
+            ?processor,
+            count = resources.len(),
+            "processor has extra resources"
+        );
 
-        for (path, res) in processor.flush()? {
-            store.put(path, res);
+        for res in processor.flush()? {
+            let url = res.url(base)?;
+            store.put(url, res);
         }
     }
 

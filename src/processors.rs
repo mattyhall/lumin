@@ -1,4 +1,4 @@
-use crate::{store::Resource, ResourceProcessor};
+use crate::{store::{Resource, URLPath}, ResourceProcessor};
 use markdown;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -30,8 +30,8 @@ impl ResourceProcessor for StaticProcessor {
 
         Ok(Resource {
             original_path: path.to_owned(),
-            renamed_path: None,
             contents: buf,
+            ..Default::default()
         })
     }
 }
@@ -77,7 +77,7 @@ impl ResourceProcessor for LiquidProcessor {
 
         Ok(Resource {
             original_path: path.to_owned(),
-            renamed_path: Some(new_path),
+            url_path: URLPath::Filepath(new_path),
             contents: buffer,
         })
     }
@@ -142,13 +142,8 @@ impl PostsProcessor {
         i: usize,
         last: bool,
         posts: &[PostItem],
-    ) -> Result<(String, Resource), Box<dyn Error>> {
-        let mut new_path: PathBuf = "posts".into();
-        if i == 0 {
-            new_path.push("index.html");
-        } else {
-            new_path.push(format!("posts-{}.html", i));
-        }
+    ) -> Result<Resource, Box<dyn Error>> {
+        let new_path = if i == 0 { "posts/index.html".to_owned() } else { format!("posts/posts-{}.html", i) };
 
         let previous = match i {
             0 => "".to_owned(),
@@ -165,11 +160,11 @@ impl PostsProcessor {
         let mut buf = Vec::new();
         self.post_list_template.render_to(&mut buf, &obj)?;
 
-        Ok((new_path.to_string_lossy().to_string(), Resource {
+        Ok(Resource {
             original_path: self.post_list_template_path.clone(),
-            renamed_path: Some(new_path),
+            url_path: URLPath::Absolute(new_path),
             contents: buf,
-        }))
+        })
     }
 }
 
@@ -198,7 +193,7 @@ impl ResourceProcessor for PostsProcessor {
             return Ok(Resource {
                 contents: vec![],
                 original_path: path.to_owned(),
-                renamed_path: None,
+                ..Default::default()
             });
         }
 
@@ -230,12 +225,12 @@ impl ResourceProcessor for PostsProcessor {
 
         Ok(Resource {
             original_path: path.to_owned(),
-            renamed_path: Some(new_path),
+            url_path: URLPath::Filepath(new_path),
             contents: contents_buf,
         })
     }
 
-    fn flush(&self) -> Result<Vec<(String, Resource)>, Box<dyn Error>> {
+    fn flush(&self) -> Result<Vec<Resource>, Box<dyn Error>> {
         let mut handle = self.posts.lock().map_err(|e| e.to_string())?;
         handle.sort_by(|a, b| a.published.cmp(&b.published));
 
