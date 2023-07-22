@@ -6,7 +6,6 @@ use markdown;
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
-    io::Read,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -28,9 +27,7 @@ impl ResourceProcessor for StaticProcessor {
     fn process(&self, path: &Path) -> Result<Resource, Box<dyn Error>> {
         info!("statically processing");
 
-        let mut buf = Vec::new();
-        std::fs::File::open(path)?.read_to_end(&mut buf)?;
-
+        let buf = std::fs::read(path)?;
         Ok(Resource {
             original_path: path.to_owned(),
             contents: buf,
@@ -133,10 +130,7 @@ impl PostsProcessor {
     fn get_metadata(&self, mut path: PathBuf) -> Result<PostMetadata, Box<dyn Error>> {
         path.set_extension("toml");
 
-        let mut f = std::fs::File::open(path)?;
-        let mut buf = String::new();
-        f.read_to_string(&mut buf)?;
-
+        let buf = std::fs::read_to_string(path)?;
         Ok(toml::from_str(&buf)?)
     }
 
@@ -206,13 +200,11 @@ impl ResourceProcessor for PostsProcessor {
 
         info!("post processing");
 
-        let mut f = std::fs::File::open(path)?;
-        let mut buf = String::new();
-        f.read_to_string(&mut buf)?;
+        let buf = std::fs::read_to_string(path)?;
+        let html = markdown::to_html(&buf);
 
         let meta = self.get_metadata(path.to_owned())?;
 
-        let html = markdown::to_html(&buf);
         let obj = liquid::object!({ "contents": html, "post_title": meta.title, "post_published": meta.published.to_string() });
         let mut contents_buf = Vec::new();
         self.post_template.render_to(&mut contents_buf, &obj)?;
@@ -237,6 +229,7 @@ impl ResourceProcessor for PostsProcessor {
         })
     }
 
+    #[instrument]
     fn flush(&self) -> Result<Vec<Resource>, Box<dyn Error>> {
         let mut handle = self.posts.lock().map_err(|e| e.to_string())?;
         handle.sort_by(|a, b| a.published.cmp(&b.published));

@@ -5,7 +5,6 @@ use axum::{Extension, Router};
 use lumin::processors::{LiquidProcessor, PostsProcessor, StaticProcessor};
 use lumin::store::{find_and_process, Store};
 use std::error::Error;
-use std::io::Read;
 use std::net::SocketAddr;
 use std::path::Path;
 use tower::ServiceBuilder;
@@ -25,11 +24,7 @@ fn create_parser(partials_dir: impl AsRef<Path>) -> Result<liquid::Parser, Box<d
         debug!(?path, "found partial");
 
         let short_path = path.strip_prefix(partials_dir.as_ref())?;
-
-        let mut f = std::fs::File::open(&path)?;
-        let mut buf = String::new();
-        f.read_to_string(&mut buf)?;
-
+        let buf = std::fs::read_to_string(&path)?;
         ims.add(short_path.file_name().unwrap().to_string_lossy(), buf);
     }
 
