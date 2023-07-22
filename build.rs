@@ -95,7 +95,7 @@ fn lang(lang: &str) -> Result<(), Box<dyn Error>> {
 fn main() {
     let out_dir = std::env::var("OUT_DIR").unwrap();
 
-    let langs = &["zig"];
+    let langs = &["zig", "c", "rust", "haskell"];
 
     langs
         .iter()

@@ -50,6 +50,10 @@ impl Highlight {
         })
     }
 
+    pub fn supported(&self, lang: &str) -> bool {
+        self.configs.contains_key(lang)
+    }
+
     pub fn highlight(&mut self, language: &str, code: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let config = &self.configs[language];
         let highlights = self.highlighter.highlight(config, code, None, |_| None)?;

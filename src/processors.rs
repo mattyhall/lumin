@@ -181,16 +181,18 @@ impl PostsProcessor {
         })
     }
 
-    #[instrument]
+    #[instrument(skip(src))]
     fn highlight_code(&self, src: &str) -> Result<String, Box<dyn Error>> {
         let mut contents = src.to_owned();
         for c in self.code_regex.captures_iter(src) {
             let all = c.get(0).unwrap();
             let code = c.get(3).unwrap().as_str();
-            debug!(start = all.start(), end = all.end(), "got code match");
 
             let language = c.get(2).map(|c| c.as_str()).unwrap_or("");
-            if language != "zig" {
+            debug!(start = all.start(), end = all.end(), language, "got code match");
+
+            let mut highlighter = self.highlighter.lock().map_err(|e| e.to_string())?;
+            if !highlighter.supported(language) {
                 contents = contents.replace(
                     all.as_str(),
                     &format!(r#"<pre class="code-listing"><code>{}</code></pre>"#, code),
@@ -200,7 +202,6 @@ impl PostsProcessor {
 
             let code = {
                 let code = &html_escape::decode_html_entities(code);
-                let mut highlighter = self.highlighter.lock().map_err(|e| e.to_string())?;
                 highlighter.highlight(&c[2], code.as_bytes())?
             };
             contents = contents.replace(
