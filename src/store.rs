@@ -46,6 +46,10 @@ pub struct Store {
 
 impl Store {
     fn put<P: Into<PathBuf>>(&mut self, path: P, resource: Resource) {
+        if resource.contents.len() == 0 {
+            return;
+        }
+
         let path = path.into();
         info!(
             ?path,
@@ -124,6 +128,21 @@ pub fn find_and_process<P: AsRef<Path>>(
 
             Ok(())
         })?;
+
+    let mut store = store.clone();
+
+    for processor in processors {
+        let resources = processor.flush()?;
+        if resources.is_empty() {
+            continue;
+        }
+
+        info!(?processor, count=resources.len(), "processor has extra resources");
+
+        for (path, res) in processor.flush()? {
+            store.put(path, res);
+        }
+    }
 
     info!(elapsed=?start.elapsed(), "rebuilding finished");
 
