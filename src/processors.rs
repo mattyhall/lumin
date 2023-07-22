@@ -1,4 +1,7 @@
-use crate::{store::{Resource, URLPath}, ResourceProcessor};
+use crate::{
+    store::{Resource, URLPath},
+    ResourceProcessor,
+};
 use markdown;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -143,12 +146,16 @@ impl PostsProcessor {
         last: bool,
         posts: &[PostItem],
     ) -> Result<Resource, Box<dyn Error>> {
-        let new_path = if i == 0 { "posts/index.html".to_owned() } else { format!("posts/posts-{}.html", i) };
+        let new_path = if i == 0 {
+            "posts/index.html".to_owned()
+        } else {
+            format!("posts/posts-{}.html", i)
+        };
 
         let previous = match i {
             0 => "".to_owned(),
             1 => "/posts/index.html".to_owned(),
-            _ => format!("/posts/posts-{}.html", i-1),
+            _ => format!("/posts/posts-{}.html", i - 1),
         };
         let next = if last {
             "".to_owned()
@@ -239,9 +246,9 @@ impl ResourceProcessor for PostsProcessor {
         let resources: Result<Vec<_>, Box<dyn Error>> = chunks
             .into_iter()
             .enumerate()
-            .map(|(i, chunk)| Ok(self.render_post_list(i, i == len - 1, chunk)?))
+            .map(|(i, chunk)| self.render_post_list(i, i == len - 1, chunk))
             .collect();
 
-        Ok(resources?)
+        resources
     }
 }

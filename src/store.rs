@@ -13,17 +13,13 @@ pub const EXTENSIONS: &[&str] = &[
     "css", "html", "jpg", "jpeg", "woff2", "liquid", "md", "markdown",
 ];
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum URLPath {
+    #[default]
     UseOriginalPath,
+
     Filepath(PathBuf),
     Absolute(String),
-}
-
-impl std::default::Default for URLPath {
-    fn default() -> Self {
-        URLPath::UseOriginalPath
-    }
 }
 
 #[derive(Clone, Default)]
@@ -45,7 +41,7 @@ impl Resource {
     fn url(&self, base: impl AsRef<Path>) -> Result<String, Box<dyn Error>> {
         let file_path = match &self.url_path {
             URLPath::UseOriginalPath => &self.original_path,
-            URLPath::Filepath(path) => &path,
+            URLPath::Filepath(path) => path,
             URLPath::Absolute(s) => return Ok(s.clone()),
         };
 
@@ -79,7 +75,7 @@ pub struct Store {
 
 impl Store {
     fn put(&mut self, path: String, resource: Resource) {
-        if resource.contents.len() == 0 {
+        if resource.contents.is_empty() {
             return;
         }
 
@@ -156,7 +152,7 @@ pub fn find_and_process<P: AsRef<Path>>(
             Ok(())
         })?;
 
-    let mut store = store.clone();
+    let mut store = store;
 
     for processor in processors {
         let resources = processor.flush()?;

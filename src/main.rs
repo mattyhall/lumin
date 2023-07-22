@@ -55,7 +55,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let parser = create_parser(&partials_dir)?;
 
     let s = StaticProcessor {};
-    let p = PostsProcessor::new(path.join("posts"), path.join("post.liquid"), path.join("post_list.liquid"), &parser)?;
+    let p = PostsProcessor::new(
+        path.join("posts"),
+        path.join("post.liquid"),
+        path.join("post_list.liquid"),
+        &parser,
+    )?;
     let l = LiquidProcessor::new(partials_dir, parser);
 
     let store = find_and_process(path, &[&p, &l, &s])?;
