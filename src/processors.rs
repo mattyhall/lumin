@@ -1,10 +1,11 @@
 use crate::{store::Resource, ResourceProcessor};
 use markdown;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
     io::Read,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 use tracing::{info, instrument};
 
@@ -89,23 +90,39 @@ struct PostMetadata {
     published: toml::value::Datetime,
 }
 
+#[derive(Serialize)]
+struct PostItem {
+    filename: String,
+    title: String,
+    description: String,
+    published: String,
+}
+
 pub struct PostsProcessor {
     posts_dir: PathBuf,
     posts_template_path: PathBuf,
     post_template: liquid::Template,
+    post_list_template_path: PathBuf,
+    post_list_template: liquid::Template,
+    posts: Arc<Mutex<Vec<PostItem>>>,
 }
 
 impl PostsProcessor {
     pub fn new(
         posts_dir: PathBuf,
         posts_template_path: PathBuf,
+        post_list_template_path: PathBuf,
         parser: &liquid::Parser,
     ) -> Result<Self, Box<dyn Error>> {
         let post_template = parser.parse_file(&posts_template_path)?;
+        let post_list_template = parser.parse_file(&post_list_template_path)?;
         Ok(Self {
             posts_dir,
             post_template,
             posts_template_path,
+            post_list_template_path,
+            post_list_template,
+            posts: Arc::default(),
         })
     }
 
@@ -119,6 +136,41 @@ impl PostsProcessor {
 
         Ok(toml::from_str(&buf)?)
     }
+
+    fn render_post_list(
+        &self,
+        i: usize,
+        last: bool,
+        posts: &[PostItem],
+    ) -> Result<(String, Resource), Box<dyn Error>> {
+        let mut new_path: PathBuf = "posts".into();
+        if i == 0 {
+            new_path.push("index.html");
+        } else {
+            new_path.push(format!("posts-{}.html", i));
+        }
+
+        let previous = match i {
+            0 => "".to_owned(),
+            1 => "/posts/index.html".to_owned(),
+            _ => format!("/posts/posts-{}.html", i-1),
+        };
+        let next = if last {
+            "".to_owned()
+        } else {
+            format!("posts-{}.html", i + 1)
+        };
+
+        let obj = liquid::object!({"posts": posts, "previous": previous, "next": next});
+        let mut buf = Vec::new();
+        self.post_list_template.render_to(&mut buf, &obj)?;
+
+        Ok((new_path.to_string_lossy().to_string(), Resource {
+            original_path: self.post_list_template_path.clone(),
+            renamed_path: Some(new_path),
+            contents: buf,
+        }))
+    }
 }
 
 impl std::fmt::Debug for PostsProcessor {
@@ -129,7 +181,7 @@ impl std::fmt::Debug for PostsProcessor {
 
 impl ResourceProcessor for PostsProcessor {
     fn matches(&self, path: &Path) -> bool {
-        if path == self.posts_template_path {
+        if path == self.posts_template_path || path == self.post_list_template_path {
             return true;
         }
 
@@ -142,15 +194,15 @@ impl ResourceProcessor for PostsProcessor {
 
     #[instrument]
     fn process(&self, path: &Path) -> Result<Resource, Box<dyn Error>> {
-        info!("post processing");
-
-        if path == self.posts_template_path {
+        if path == self.posts_template_path || path == self.post_list_template_path {
             return Ok(Resource {
                 contents: vec![],
                 original_path: path.to_owned(),
                 renamed_path: None,
             });
         }
+
+        info!("post processing");
 
         let mut f = std::fs::File::open(path)?;
         let mut buf = String::new();
@@ -166,10 +218,35 @@ impl ResourceProcessor for PostsProcessor {
         let mut new_path = path.to_owned();
         new_path.set_extension("html");
 
+        {
+            let mut handle = self.posts.lock().map_err(|e| e.to_string())?;
+            handle.push(PostItem {
+                filename: new_path.file_name().unwrap().to_string_lossy().into(),
+                title: meta.title,
+                description: meta.description,
+                published: meta.published.to_string(),
+            })
+        }
+
         Ok(Resource {
             original_path: path.to_owned(),
             renamed_path: Some(new_path),
             contents: contents_buf,
         })
+    }
+
+    fn flush(&self) -> Result<Vec<(String, Resource)>, Box<dyn Error>> {
+        let mut handle = self.posts.lock().map_err(|e| e.to_string())?;
+        handle.sort_by(|a, b| a.published.cmp(&b.published));
+
+        let chunks: Vec<_> = handle.chunks(10).collect();
+        let len = chunks.len();
+        let resources: Result<Vec<_>, Box<dyn Error>> = chunks
+            .into_iter()
+            .enumerate()
+            .map(|(i, chunk)| Ok(self.render_post_list(i, i == len - 1, chunk)?))
+            .collect();
+
+        Ok(resources?)
     }
 }
