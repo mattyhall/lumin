@@ -38,6 +38,8 @@
           ];
         };
 
+        nixosModule = import ./service.nix { inherit system; outputs = self.outputs; };
+
         formatter = pkgs.alejandra;
       }
     );
