@@ -76,8 +76,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn root<T>(store: Extension<Store>, request: Request<T>) -> impl IntoResponse {
-    let path = request.uri().path().trim_start_matches('/');
+    let path = request.uri().path();
+    if path == "/" {
+        return store.get("index.html").unwrap().into_response();
+    }
+
+    let path = path.trim_start_matches('/');
     if let Some(res) = store.get(path) {
+        return res.into_response();
+    }
+
+    let path = path.trim_end_matches('/');
+    if let Some(res) = store.get(&format!("{}/index.html", path)) {
         return res.into_response();
     }
 
