@@ -2,14 +2,17 @@ use axum::http::{Request, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
+use lumin::ResourceProcessor;
 use lumin::processors::{LiquidProcessor, PostsProcessor, StaticProcessor};
 use lumin::store::{find_and_process, Store};
+use notify_debouncer_full::notify::Watcher;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use tracing::{debug, info};
+use tracing::{debug, info, error, instrument};
 
 fn create_parser(partials_dir: impl AsRef<Path>) -> Result<liquid::Parser, Box<dyn Error>> {
     let mut ims = liquid::partials::InMemorySource::new();
@@ -36,6 +39,13 @@ fn create_parser(partials_dir: impl AsRef<Path>) -> Result<liquid::Parser, Box<d
         .build()?)
 }
 
+#[instrument(skip(store))]
+fn rebuild(path: &Path, processors: &[&dyn ResourceProcessor], store: Store) -> Result<(), Box<dyn Error>> {
+    let new_store = find_and_process(path, processors)?;
+    store.replace(new_store);
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
@@ -57,8 +67,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
         &parser,
     )?;
     let l = LiquidProcessor::new(partials_dir, parser);
+    let processors: &[&dyn ResourceProcessor] = &[&p, &l, &s];
+    let store = find_and_process(&path, processors)?;
 
-    let store = find_and_process(path, &[&p, &l, &s])?;
+    let new_store = store.clone();
+    let new_path = path.clone();
+
+    let mut debouncer = notify_debouncer_full::new_debouncer(Duration::from_millis(250), None, move |res: notify_debouncer_full::DebounceEventResult| {
+        let processors: &[&dyn ResourceProcessor] = &[&p, &l, &s];
+        let path = new_path.clone();
+        let store = new_store.clone();
+        info!("files changed");
+        match res {
+            Ok(events) => events.into_iter().for_each(|ev| debug!(?ev, "got notify event")),
+            Err(errors) => errors.into_iter().for_each(|e| error!(?e, "notify error")),
+        }
+
+        rebuild(&path, processors, store.clone()).expect("rebuild did not work");
+    })?;
+    debouncer.watcher().watch(&path, notify_debouncer_full::notify::RecursiveMode::Recursive)?;
 
     let app = Router::new().fallback(get(root)).layer(
         ServiceBuilder::new()

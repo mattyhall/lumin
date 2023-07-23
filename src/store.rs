@@ -93,6 +93,12 @@ impl Store {
         let hm = self.hm.lock().unwrap();
         hm.get(path).cloned()
     }
+
+    pub fn replace(&self, other: Store) {
+        let mut other_handle = other.hm.lock().unwrap();
+        let mut handle = self.hm.lock().unwrap();
+        std::mem::swap(&mut *handle, &mut *other_handle)
+    }
 }
 
 fn walk(base: &Path, output: &mut Vec<PathBuf>) -> Result<(), Box<dyn Error>> {

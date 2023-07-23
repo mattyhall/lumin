@@ -11,6 +11,7 @@ html-escape = "0.2.13"
 liquid = { version = "0.26.4", features = ["stdlib", "liquid-lib"] }
 markdown = "1.0.0-alpha.11"
 mime_guess = "2.0.4"
+notify-debouncer-full = { version = "0.2.0", default-features = false }
 rand = "0.8.5"
 rayon = "1.7.0"
 regex = "1.9.1"
