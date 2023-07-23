@@ -172,7 +172,7 @@ pub fn find_and_process<P: AsRef<Path>>(
             "processor has extra resources"
         );
 
-        for res in processor.flush()? {
+        for res in resources {
             let url = res.url(base)?;
             store.put(url, res);
         }
