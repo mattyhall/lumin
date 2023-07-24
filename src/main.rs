@@ -119,7 +119,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Err(errors) => errors.into_iter().for_each(|e| error!(?e, "notify error")),
             }
 
-            rebuild(&path, processors, store.clone()).expect("rebuild did not work");
+            rebuild(&path, processors, store).expect("rebuild did not work");
 
             // It's fine if there are no receives, so ignore the error
             let _ = new_tx.send(());

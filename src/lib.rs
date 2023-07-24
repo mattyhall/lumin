@@ -1,8 +1,8 @@
 use std::{error::Error, path::Path};
 
+pub mod highlight;
 pub mod processors;
 pub mod store;
-pub mod highlight;
 
 pub trait ResourceProcessor: Send + Sync + std::fmt::Debug {
     fn matches(&self, path: &Path) -> bool;

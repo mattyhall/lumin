@@ -78,7 +78,7 @@ mod {lang} {{
         config_args = config_args
     );
 
-    std::fs::write(&filepath, contents)?;
+    std::fs::write(filepath, contents)?;
 
     Ok(())
 }
@@ -99,8 +99,7 @@ fn main() {
 
     langs
         .iter()
-        .map(|l| lang(l))
-        .collect::<Result<(), Box<dyn Error>>>()
+        .try_for_each(|l| lang(l))
         .expect("could not build");
 
     let includes: Vec<_> = langs
@@ -139,7 +138,7 @@ pub fn get_configs(highlight_names: &[&'static str]) -> Result<HashMap<&'static 
     );
 
     let mod_path: PathBuf = [&out_dir, "generated_tree_sitter.rs"].iter().collect();
-    std::fs::write(&mod_path, contents).expect("could not write generated_tree_sitter.rs");
+    std::fs::write(mod_path, contents).expect("could not write generated_tree_sitter.rs");
 
     println!("cargo:rerun-if-changed=build.rs");
 }

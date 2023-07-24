@@ -45,7 +45,11 @@ pub struct LiquidProcessor {
 }
 
 impl LiquidProcessor {
-    pub fn new(partials_dir: PathBuf, parser: liquid::Parser, development: bool) -> LiquidProcessor {
+    pub fn new(
+        partials_dir: PathBuf,
+        parser: liquid::Parser,
+        development: bool,
+    ) -> LiquidProcessor {
         LiquidProcessor {
             partials_dir,
             parser,
@@ -195,7 +199,12 @@ impl PostsProcessor {
             let code = c.get(3).unwrap().as_str();
 
             let language = c.get(2).map(|c| c.as_str()).unwrap_or("");
-            debug!(start = all.start(), end = all.end(), language, "got code match");
+            debug!(
+                start = all.start(),
+                end = all.end(),
+                language,
+                "got code match"
+            );
 
             let mut highlighter = self.highlighter.lock().map_err(|e| e.to_string())?;
             if !highlighter.supported(language) {
@@ -286,7 +295,7 @@ impl ResourceProcessor for PostsProcessor {
     fn flush(&self) -> Result<Vec<Resource>, Box<dyn Error>> {
         let mut handle = self.posts.lock().map_err(|e| e.to_string())?;
         let mut posts = std::mem::take(&mut *handle);
-        
+
         posts.sort_by(|a, b| a.published.cmp(&b.published).reverse());
 
         let chunks: Vec<_> = posts.chunks(10).collect();

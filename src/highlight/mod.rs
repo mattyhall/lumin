@@ -64,9 +64,9 @@ impl Highlight {
                 HighlightEvent::Source { start, end } => {
                     let s = std::str::from_utf8(&code[start..end])?;
                     html_escape::encode_safe_to_vec(s, &mut buf);
-                },
+                }
                 HighlightEvent::HighlightStart(h) => {
-                    let class = HIGHLIGHT_NAMES[h.0].replace(".", "-");
+                    let class = HIGHLIGHT_NAMES[h.0].replace('.', "-");
                     buf.extend_from_slice(format!(r#"<span class="{}">"#, class).as_bytes());
                 }
                 HighlightEvent::HighlightEnd => buf.extend_from_slice(b"</span>"),
