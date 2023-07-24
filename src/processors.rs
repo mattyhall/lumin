@@ -264,7 +264,7 @@ impl ResourceProcessor for PostsProcessor {
         info!("post processing");
 
         let buf = std::fs::read_to_string(path)?;
-        let html = markdown::to_html(&buf);
+        let html = markdown::to_html_with_options(&buf, &markdown::Options::gfm())?;
 
         let meta = self.get_metadata(path.to_owned())?;
 
