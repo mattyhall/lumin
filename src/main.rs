@@ -26,6 +26,17 @@ struct Args {
     development: bool,
 }
 
+const DEV_RELOAD: &str = r#"
+{% if development %}
+<script type="text/javascript">
+  const eventSrc = new EventSource('/sse/update');
+  eventSrc.onmessage = (_) => {
+    location.reload();
+  };
+</script>
+{% endif %}
+"#;
+
 fn create_parser(partials_dir: impl AsRef<Path>) -> Result<liquid::Parser, Box<dyn Error>> {
     let mut ims = liquid::partials::InMemorySource::new();
 
@@ -42,6 +53,8 @@ fn create_parser(partials_dir: impl AsRef<Path>) -> Result<liquid::Parser, Box<d
         let buf = std::fs::read_to_string(&path)?;
         ims.add(short_path.file_name().unwrap().to_string_lossy(), buf);
     }
+
+    ims.add("dev_reload", DEV_RELOAD);
 
     let partials = liquid::partials::EagerCompiler::new(ims);
 
@@ -78,8 +91,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         path.join("post.liquid"),
         path.join("post_list.liquid"),
         &parser,
+        args.development,
     )?;
-    let l = LiquidProcessor::new(partials_dir, parser);
+    let l = LiquidProcessor::new(partials_dir, parser, args.development);
     let processors: &[&dyn ResourceProcessor] = &[&p, &l, &s];
     let store = find_and_process(&path, processors)?;
 

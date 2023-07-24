@@ -41,13 +41,15 @@ impl ResourceProcessor for StaticProcessor {
 pub struct LiquidProcessor {
     partials_dir: PathBuf,
     parser: liquid::Parser,
+    development: bool,
 }
 
 impl LiquidProcessor {
-    pub fn new(partials_dir: PathBuf, parser: liquid::Parser) -> LiquidProcessor {
+    pub fn new(partials_dir: PathBuf, parser: liquid::Parser, development: bool) -> LiquidProcessor {
         LiquidProcessor {
             partials_dir,
             parser,
+            development,
         }
     }
 }
@@ -69,7 +71,7 @@ impl ResourceProcessor for LiquidProcessor {
         info!("liquid processing");
 
         let tmpl = self.parser.parse_file(path)?;
-        let obj = liquid::Object::new();
+        let obj = liquid::object!({"development": self.development});
 
         let mut buffer = Vec::new();
         tmpl.render_to(&mut buffer, &obj)?;
@@ -111,6 +113,8 @@ pub struct PostsProcessor {
 
     posts: Arc<Mutex<Vec<PostItem>>>,
     highlighter: Arc<Mutex<highlight::Highlight>>,
+
+    development: bool,
 }
 
 impl PostsProcessor {
@@ -119,6 +123,7 @@ impl PostsProcessor {
         posts_template_path: PathBuf,
         post_list_template_path: PathBuf,
         parser: &liquid::Parser,
+        development: bool,
     ) -> Result<Self, Box<dyn Error>> {
         let post_template = parser.parse_file(&posts_template_path)?;
         let post_list_template = parser.parse_file(&post_list_template_path)?;
@@ -128,6 +133,7 @@ impl PostsProcessor {
             posts_template_path,
             post_list_template_path,
             post_list_template,
+            development,
             posts: Arc::default(),
             highlighter: Arc::new(Mutex::new(highlight::Highlight::new()?)),
             code_regex: RegexBuilder::new(
@@ -170,7 +176,7 @@ impl PostsProcessor {
             format!("posts-{}.html", i + 1)
         };
 
-        let obj = liquid::object!({"posts": posts, "previous": previous, "next": next});
+        let obj = liquid::object!({"posts": posts, "previous": previous, "next": next ,"development": self.development});
         let mut buf = Vec::new();
         self.post_list_template.render_to(&mut buf, &obj)?;
 
@@ -253,7 +259,7 @@ impl ResourceProcessor for PostsProcessor {
 
         let meta = self.get_metadata(path.to_owned())?;
 
-        let obj = liquid::object!({ "contents": html, "post_title": meta.title, "post_published": meta.published.to_string() });
+        let obj = liquid::object!({ "contents": html, "post_title": meta.title, "post_published": meta.published.to_string(), "development": self.development });
         let contents = self.highlight_code(&self.post_template.render(&obj)?)?;
 
         let mut new_path = path.to_owned();
