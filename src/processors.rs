@@ -13,7 +13,7 @@ use std::{
 };
 use tracing::{debug, info, instrument};
 
-const STATIC_EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2"];
+const STATIC_EXTENSIONS: &[&str] = &["css", "html", "jpg", "jpeg", "woff2", "png"];
 
 #[derive(Debug)]
 pub struct StaticProcessor {}
