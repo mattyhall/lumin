@@ -2,17 +2,24 @@ use axum::http::{Request, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
+use clap::Parser;
 use lumin::ResourceProcessor;
 use lumin::processors::{LiquidProcessor, PostsProcessor, StaticProcessor};
 use lumin::store::{find_and_process, Store};
 use notify_debouncer_full::notify::Watcher;
 use std::error::Error;
 use std::net::SocketAddr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, info, error, instrument};
+
+#[derive(Debug, Parser)]
+struct Args {
+    #[arg(help = "The site to serve")]
+    site_path: PathBuf,
+}
 
 fn create_parser(partials_dir: impl AsRef<Path>) -> Result<liquid::Parser, Box<dyn Error>> {
     let mut ims = liquid::partials::InMemorySource::new();
@@ -50,11 +57,8 @@ fn rebuild(path: &Path, processors: &[&dyn ResourceProcessor], store: Store) -> 
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
-    let path = if let Some(arg) = std::env::args().skip(1).take(1).next() {
-        arg.into()
-    } else {
-        std::env::current_dir()?
-    };
+    let args = Args::parse();
+    let path = args.site_path;
 
     let partials_dir = path.join("partials");
     let parser = create_parser(&partials_dir)?;
