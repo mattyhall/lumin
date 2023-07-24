@@ -1,24 +1,29 @@
 use axum::http::{Request, StatusCode};
-use axum::response::IntoResponse;
+use axum::response::{sse, IntoResponse};
 use axum::routing::get;
 use axum::{Extension, Router};
 use clap::Parser;
-use lumin::ResourceProcessor;
+use futures_util::stream::Stream;
 use lumin::processors::{LiquidProcessor, PostsProcessor, StaticProcessor};
 use lumin::store::{find_and_process, Store};
+use lumin::ResourceProcessor;
 use notify_debouncer_full::notify::Watcher;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
-use tracing::{debug, info, error, instrument};
+use tracing::{debug, error, info, instrument};
 
 #[derive(Debug, Parser)]
 struct Args {
     #[arg(help = "The site to serve")]
     site_path: PathBuf,
+
+    #[arg(short = 'd')]
+    development: bool,
 }
 
 fn create_parser(partials_dir: impl AsRef<Path>) -> Result<liquid::Parser, Box<dyn Error>> {
@@ -47,7 +52,11 @@ fn create_parser(partials_dir: impl AsRef<Path>) -> Result<liquid::Parser, Box<d
 }
 
 #[instrument(skip(store))]
-fn rebuild(path: &Path, processors: &[&dyn ResourceProcessor], store: Store) -> Result<(), Box<dyn Error>> {
+fn rebuild(
+    path: &Path,
+    processors: &[&dyn ResourceProcessor],
+    store: Store,
+) -> Result<(), Box<dyn Error>> {
     let new_store = find_and_process(path, processors)?;
     store.replace(new_store);
     Ok(())
@@ -77,21 +86,47 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let new_store = store.clone();
     let new_path = path.clone();
 
-    let mut debouncer = notify_debouncer_full::new_debouncer(Duration::from_millis(250), None, move |res: notify_debouncer_full::DebounceEventResult| {
-        let processors: &[&dyn ResourceProcessor] = &[&p, &l, &s];
-        let path = new_path.clone();
-        let store = new_store.clone();
-        info!("files changed");
-        match res {
-            Ok(events) => events.into_iter().for_each(|ev| debug!(?ev, "got notify event")),
-            Err(errors) => errors.into_iter().for_each(|e| error!(?e, "notify error")),
-        }
+    let (tx, _) = tokio::sync::broadcast::channel::<()>(1);
 
-        rebuild(&path, processors, store.clone()).expect("rebuild did not work");
-    })?;
-    debouncer.watcher().watch(&path, notify_debouncer_full::notify::RecursiveMode::Recursive)?;
+    let new_tx = tx.clone();
 
-    let app = Router::new().fallback(get(root)).layer(
+    let mut debouncer = notify_debouncer_full::new_debouncer(
+        Duration::from_millis(250),
+        None,
+        move |res: notify_debouncer_full::DebounceEventResult| {
+            let processors: &[&dyn ResourceProcessor] = &[&p, &l, &s];
+            let path = new_path.clone();
+            let store = new_store.clone();
+            info!("files changed");
+            match res {
+                Ok(events) => events
+                    .into_iter()
+                    .for_each(|ev| debug!(?ev, "got notify event")),
+                Err(errors) => errors.into_iter().for_each(|e| error!(?e, "notify error")),
+            }
+
+            rebuild(&path, processors, store.clone()).expect("rebuild did not work");
+
+            // It's fine if there are no receives, so ignore the error
+            let _ = new_tx.send(());
+        },
+    )?;
+    debouncer.watcher().watch(
+        &path,
+        notify_debouncer_full::notify::RecursiveMode::Recursive,
+    )?;
+
+    let sse = Router::new()
+        .route("/update", get(update_sse))
+        .layer(Extension(tx));
+
+    let mut app = Router::new();
+
+    if args.development {
+        app = app.nest("/sse", sse);
+    }
+
+    app = app.fallback(get(root)).layer(
         ServiceBuilder::new()
             .layer(TraceLayer::new_for_http())
             .layer(Extension(store)),
@@ -123,4 +158,12 @@ async fn root<T>(store: Extension<Store>, request: Request<T>) -> impl IntoRespo
     }
 
     StatusCode::NOT_FOUND.into_response()
+}
+
+async fn update_sse(
+    tx: Extension<tokio::sync::broadcast::Sender<()>>,
+) -> sse::Sse<impl Stream<Item = Result<sse::Event, std::convert::Infallible>>> {
+    let rx = tx.0.subscribe();
+    let stream = BroadcastStream::new(rx).map(|_| Ok(sse::Event::default().data("update")));
+    sse::Sse::new(stream).keep_alive(sse::KeepAlive::default())
 }

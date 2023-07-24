@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = { version = "0.6.18", features = ["tracing"] }
 clap = { version = "4.3.19", features = ["derive"] }
+axum = { version = "0.6.18", features = ["tracing", "tokio"] }
+futures-util = "0.3.28"
 html-escape = "0.2.13"
 liquid = { version = "0.26.4", features = ["stdlib", "liquid-lib"] }
 markdown = "1.0.0-alpha.11"
@@ -18,6 +19,7 @@ rayon = "1.7.0"
 regex = "1.9.1"
 serde = { version = "1.0.174", features = ["derive"] }
 tokio = { version = "1.29.1", features = ["macros", "rt-multi-thread", "fs", "sync"] }
+tokio-stream = { version = "0.1.14", features = ["sync"] }
 toml = "0.7.6"
 tower = "0.4.13"
 tower-http = { version = "0.4.1", features = ["tracing", "trace"] }
