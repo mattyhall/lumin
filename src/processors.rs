@@ -268,7 +268,13 @@ impl ResourceProcessor for PostsProcessor {
 
         let meta = self.get_metadata(path.to_owned())?;
 
-        let obj = liquid::object!({ "contents": html, "post_title": meta.title, "post_published": meta.published.to_string(), "development": self.development });
+        let obj = liquid::object!({
+            "contents": html,
+            "post_title": meta.title,
+            "post_published": meta.published.to_string(),
+            "post_description": meta.description,
+            "development": self.development
+        });
         let contents = self.highlight_code(&self.post_template.render(&obj)?)?;
 
         let mut new_path = path.to_owned();
