@@ -155,6 +155,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn not_found(store: Extension<Store>) -> impl IntoResponse {
+    let res = store.get("not_found.html").unwrap().into_response();
+    (StatusCode::NOT_FOUND, res)
+}
+
 async fn root<T>(store: Extension<Store>, request: Request<T>) -> impl IntoResponse {
     let path = request.uri().path();
     if path == "/" {
@@ -171,7 +176,7 @@ async fn root<T>(store: Extension<Store>, request: Request<T>) -> impl IntoRespo
         return res.into_response();
     }
 
-    StatusCode::NOT_FOUND.into_response()
+    not_found(store).into_response()
 }
 
 async fn update_sse(
