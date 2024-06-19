@@ -104,6 +104,8 @@ struct PostItem {
     title: String,
     description: String,
     published: String,
+    contents: String,
+    link: String,
 }
 
 pub struct PostsProcessor {
@@ -112,6 +114,7 @@ pub struct PostsProcessor {
     post_template: liquid::Template,
     post_list_template_path: PathBuf,
     post_list_template: liquid::Template,
+    feed_template: liquid::Template,
 
     code_regex: Regex,
 
@@ -126,17 +129,20 @@ impl PostsProcessor {
         posts_dir: PathBuf,
         posts_template_path: PathBuf,
         post_list_template_path: PathBuf,
+        feed_template_path: PathBuf,
         parser: &liquid::Parser,
         development: bool,
     ) -> Result<Self, Box<dyn Error>> {
         let post_template = parser.parse_file(&posts_template_path)?;
         let post_list_template = parser.parse_file(&post_list_template_path)?;
+        let feed_template = parser.parse_file(&feed_template_path)?;
         Ok(Self {
             posts_dir,
             post_template,
             posts_template_path,
             post_list_template_path,
             post_list_template,
+            feed_template,
             development,
             posts: Arc::default(),
             highlighter: Arc::new(Mutex::new(highlight::Highlight::new()?)),
@@ -188,6 +194,17 @@ impl PostsProcessor {
             original_path: self.post_list_template_path.clone(),
             url_path: URLPath::Absolute(new_path),
             contents: buf,
+        })
+    }
+
+    fn render_feed(&self, posts: &[PostItem]) -> Result<Resource, Box<dyn Error>> {
+        info!("generating feed");
+        let obj = liquid::object!({ "items": &posts[..std::cmp::min(10, posts.len())] });
+        let contents = self.feed_template.render(&obj)?;
+        Ok(Resource {
+            original_path: "feed.liquid".into(),
+            url_path: URLPath::Absolute("atom.xml".to_string()),
+            contents: contents.as_bytes().to_owned(),
         })
     }
 
@@ -287,6 +304,8 @@ impl ResourceProcessor for PostsProcessor {
                 title: meta.title,
                 description: meta.description,
                 published: meta.published.to_string(),
+                contents: html,
+                link: new_path.to_string_lossy().to_string(),
             })
         }
 
@@ -312,6 +331,9 @@ impl ResourceProcessor for PostsProcessor {
             .map(|(i, chunk)| self.render_post_list(i, i == len - 1, chunk))
             .collect();
 
-        resources
+        let mut resources = resources?;
+        resources.push(self.render_feed(&posts)?);
+
+        Ok(resources)
     }
 }

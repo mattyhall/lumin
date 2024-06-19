@@ -90,6 +90,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         path.join("posts"),
         path.join("post.liquid"),
         path.join("post_list.liquid"),
+        path.join("feed.liquid"),
         &parser,
         args.development,
     )?;
