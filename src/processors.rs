@@ -305,7 +305,8 @@ impl ResourceProcessor for PostsProcessor {
                 description: meta.description,
                 published: meta.published.to_string(),
                 contents: html,
-                link: new_path.to_string_lossy().to_string(),
+                link: "posts/".to_string()
+                    + &new_path.file_name().unwrap().to_string_lossy().to_string(),
             })
         }
 
